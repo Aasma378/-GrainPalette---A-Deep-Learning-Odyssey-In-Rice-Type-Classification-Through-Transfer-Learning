@@ -1,0 +1,22 @@
+import os
+import shutil
+
+# Source folder where all images are located
+src_dir = 'images/'
+# Target dataset folder
+target_dir = 'dataset/train/'
+
+# List of your class names
+classes = ['Basmati', 'Jasmine', 'Arborio', 'Sona_Masoori', 'Ponni']
+
+# Create folders
+for class_name in classes:
+    os.makedirs(os.path.join(target_dir, class_name), exist_ok=True)
+
+# Move images to respective class folders based on filename
+for filename in os.listdir(src_dir):
+    for class_name in classes:
+        if class_name.lower().replace("_", "") in filename.lower().replace("_", ""):
+            src_path = os.path.join(src_dir, filename)
+            dest_path = os.path.join(target_dir, class_name, filename)
+            shutil.copy(src_path, dest_path)

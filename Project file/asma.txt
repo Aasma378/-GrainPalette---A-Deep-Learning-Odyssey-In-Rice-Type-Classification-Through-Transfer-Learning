@@ -1,0 +1,90 @@
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras import layers, models, callbacks
+from tensorflow.keras.applications import MobileNetV2
+import os
+
+# --- Parameters ---
+IMG_SIZE = (224, 224)
+BATCH_SIZE = 32
+EPOCHS = 20
+DATA_DIR = 'dataset/train'  # Put your dataset here, organized by class subfolders
+
+# --- Data Preparation ---
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    validation_split=0.2,
+    rotation_range=20,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    horizontal_flip=True
+)
+
+train_generator = train_datagen.flow_from_directory(
+    DATA_DIR,
+    target_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='categorical',
+    subset='training',
+    shuffle=True
+)
+
+validation_generator = train_datagen.flow_from_directory(
+    DATA_DIR,
+    target_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='categorical',
+    subset='validation',
+    shuffle=False
+)
+
+# --- Model Building (Transfer Learning) ---
+base_model = MobileNetV2(input_shape=IMG_SIZE + (3,), include_top=False, weights='imagenet')
+base_model.trainable = False  # Freeze base layers
+
+model = models.Sequential([
+    base_model,
+    layers.GlobalAveragePooling2D(),
+    layers.Dense(256, activation='relu'),
+    layers.Dropout(0.3),
+    layers.Dense(train_generator.num_classes, activation='softmax')
+])
+
+model.compile(
+    optimizer='adam',
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+model.summary()
+
+# --- Callbacks ---
+checkpoint_cb = callbacks.ModelCheckpoint("grainpalette_best_model.h5", save_best_only=True, monitor="val_accuracy")
+earlystop_cb = callbacks.EarlyStopping(patience=5, restore_best_weights=True)
+
+# --- Training ---
+history = model.fit(
+    train_generator,
+    validation_data=validation_generator,
+    epochs=EPOCHS,
+    callbacks=[checkpoint_cb, earlystop_cb]
+)
+
+# --- Optional: Fine-tuning ---
+base_model.trainable = True
+for layer in base_model.layers[:-50]:
+    layer.trainable = False
+
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(1e-5),
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+fine_tune_epochs = 10
+history_fine = model.fit(
+    train_generator,
+    validation_data=validation_generator,
+    epochs=fine_tune_epochs,
+    callbacks=[checkpoint_cb, earlystop_cb]
+)
